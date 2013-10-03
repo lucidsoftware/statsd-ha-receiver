@@ -4,18 +4,18 @@ var dgram  = require('dgram'),
     config = require('./lib/config'),
     fs     = require('fs'),
     events = require('events'),
+    set    = require('./lib/set'),
     logger = require('./lib/logger');
 
 var startupTime = Math.round(new Date().getTime() / 1000);
 var conf;
 var l;
 
-var stats = {
-	messages: {
-		last_msg_seen: startupTime,
-		bad_lines_seen: 0
-	}
-};
+var counters = {};
+var timers = {};
+var timerCounters = {};
+var gauges = {};
+var sets = {};
 
 var configDefaults = {
 	port: 8125,
@@ -29,6 +29,32 @@ var configDefaults = {
 	batchSize: 1024,
 	aggregation: []
 };
+
+var metricMapper = {
+	ms: 'timer',
+	g: 'gauge',
+	c: 'counter',
+	s: 'set'
+};
+
+function flushMetrics() {
+	var metrics = {
+		counters: counters,
+		timers: timers,
+		timerCounters: timerCounters,
+		gauges: gauges,
+		sets: sets
+	};
+
+	counters = {};
+	timers = {};
+	timerCounters = {};
+	gauges = {};
+	sets = {};
+
+	util.log(util.inspect(metrics));
+	console.log("flush");
+}
 
 function normalizeConfig(config) {
 	var key, i;
@@ -65,15 +91,146 @@ function validateConfig(config) {
 	}
 }
 
-function processLine(line, fromSocket) {
-	if (conf.dumpMessages && fromSocket) {
-		l.log("received: " + line);
+function recursiveAggregatedKeys(key, type, found, levels) {
+	var aggregationIndex, backIndex, generationIndex;
+
+	if (levels >= 20) {
+		l.log("Too many levels of aggregation with " + key);
+		return;
+	}
+
+	if (found.hasOwnProperty(key)) {
+		l.log("Recursive aggregation found with " + key);
+		return;
+	}
+
+	found[key] = true;
+	for (aggregationIndex = 0; aggregationIndex < conf.aggregation.length; aggregationIndex++) {
+		var rule = conf.aggregation[aggregationIndex];
+
+		if (rule.types.indexOf(type) == -1) { continue; }
+
+		var matches = key.match(rule.match);
+		if (!matches) { continue; }
+
+		for (generationIndex = 0; generationIndex < rule.generate.length; generationIndex++) {
+			var newKey = rule.generate[generationIndex];
+			for (backIndex = 1; backIndex < matches.length; backIndex++) {
+				var replace = new RegExp("\\(" + backIndex + "\\)", "g");
+				newKey = newKey.replace(replace, matches[backIndex]);
+			}
+
+			if (rule.recursive) {
+				recursiveAggregatedKeys(newKey, type, found, levels + 1);
+			}
+		}
+
+		if (rule.last) { break; }
 	}
 }
 
-function processLines(lines, fromSocket) {
+function aggregatedKeys(key, type, includeOriginal) {
+	var key;
+	includeOriginal = includeOriginal || false;
+
+	var found = {};
+
+	recursiveAggregatedKeys(key, type, found, 0);
+	if (!includeOriginal) {
+		delete(found[key]);
+	}
+
+	var ret = [];
+	for (key in found) {
+		ret.push(key);
+	}
+
+	return ret;
+}
+
+function processLine(line) {
+	var metricType;
+
+	line = line.trim();
+	if (line == '') return;
+
+	if (conf.dumpMessages) {
+		l.log(line);
+	}
+
+	var bits = line.split(':');
+	var key = bits.shift()
+	          .replace(/\s+/g, '_')
+	          .replace(/\//g, '-')
+	          .replace(/[^a-zA-Z_\-0-9\.]/g, '');
+
+	if (bits.length === 0) {
+		bits.push("1");
+	}
+
+	var keyAggregationsByMetricType = {};
+
+	for (var i = 0; i < bits.length; i++) {
+		var sampleRate = 1;
+		var fields = bits[i].split("|");
+
+		if (fields[2]) {
+			if (fields[2].match(/^@([\d\.]+)/)) {
+				sampleRate = Number(fields[2].match(/^@([\d\.]+)/)[1]);
+			} else {
+				l.log('Bad line: ' + fields + ' in msg "' + line +'"; has invalid sample rate');
+				// counters[bad_lines_seen]++;
+				continue;
+			}
+		}
+
+		if (fields[1] === undefined) {
+			l.log('Bad line: ' + fields + ' in msg "' + line +'"');
+			// counters[bad_lines_seen]++;
+			continue;
+		}
+
+		var metricType = fields[1].trim();
+		var mappedMetricType = metricMapper[metricType];
+
+		if (!keyAggregationsByMetricType.hasOwnProperty(mappedMetricType)) {
+			keyAggregationsByMetricType[mappedMetricType] = [key].concat(aggregatedKeys(key, mappedMetricType));
+		}
+
+		var allKeys = keyAggregationsByMetricType[mappedMetricType];
+		for (var allKeyIndex = 0; allKeyIndex < allKeys.length; allKeyIndex++) {
+			var oneKey = allKeys[allKeyIndex];
+			if (metricType === "ms") {
+				if (! timers[oneKey]) {
+					timers[oneKey] = [];
+					timerCounters[oneKey] = 0;
+				}
+				timers[oneKey].push(Number(fields[0] || 0));
+				timerCounters[oneKey] += (1 / sampleRate);
+			} else if (metricType === "g") {
+				if (gauges[oneKey] && fields[0].match(/^[-+]/)) {
+					gauges[oneKey] += Number(fields[0] || 0);
+				} else {
+					gauges[oneKey] = Number(fields[0] || 0);
+				}
+			} else if (metricType === "s") {
+				if (! sets[oneKey]) {
+					sets[oneKey] = new set.Set();
+				}
+				sets[oneKey].insert(fields[0] || '0');
+			} else {
+				if (! counters[oneKey]) {
+					counters[oneKey] = 0;
+				}
+				counters[oneKey] += Number(fields[0] || 1) * (1 / sampleRate);
+			}
+		}
+	}
+}
+
+function processLines(lines) {
 	for(var i = 0; i < lines.length; i++) {
-		processLine(lines[i], fromSocket);
+		processLine(lines[i]);
 	}
 }
 
@@ -92,7 +249,7 @@ function startServer() {
 			if (conf.debug) {
 				l.log("Accepted message from " + remote);
 			}
-			processLines(data.split("\n"), true);
+			processLines(data.split("\n"));
 		});
 
 		server.on("listening", function() {
@@ -110,19 +267,13 @@ function startServer() {
 			}
 
 			var buffer = '';
-
 			socket.on('data', function(socketBuffer) {
-				var data = socketBuffer.toString();
-				buffer += data;
-				
-				var split = buffer.split("\n");
-				processLines(split.slice(0, split.length - 1), true);
-				buffer = split[split.length-1];
+				buffer += socketBuffer.toString();
 			});
 
 			socket.on('end', function() {
 				if (buffer.length > 0) {
-					processLines(buffer.split("\n"), true);
+					processLines(buffer.split("\n"));
 				}
 			});
 		});
@@ -146,6 +297,8 @@ config.configFile(process.argv[2], function (newConfig) {
 
 	conf = newConfig;
 	l = new logger.Logger(newConfig.log || {});
+
+	setInterval(flushMetrics, conf.flushInterval);
 
 	startServer();
 });

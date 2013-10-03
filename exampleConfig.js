@@ -35,9 +35,7 @@ Optional Variables:
 	aggregation:      array of aggregation rules to apply to incoming and aggregated metrics.
 	                  Metrics [default: [] (empty array)]
 		match:        regex to match incoming metrics against
-		type:         gauge, set, counter, or timer.
-		              gauge will be averaged and flushed at flushInterval
-		              set, counter, and timer will be immediately flushed to shards as is
+		types:        array of gauge, set, counter, and/or timer.
 		recursive:    true if the generated metrics should also be aggregated
 		last:         true if processing should stop if a metric matches this rule
 		generate:     array of metrics to generate when an incoming metric matches
@@ -46,7 +44,7 @@ Optional Variables:
 */
 
 {
-	shardRingMax: 100,
+	shardRingSize: 100,
 	shards: [
 		{ hostname: '1.1.1.1', protocol: 'udp4', port: 8125, ringIndex:  0 },
 		{ hostname: '2.2.2.2', protocol: 'udp4', port: 8125, ringIndex: 25 },
@@ -56,7 +54,7 @@ Optional Variables:
 	aggregation: [
 		{
 			match: /^(stats\.counters\.servers)\.myserver\.(.*)$/,
-			type: 'counter',
+			types: ['counter'],
 			last: false,
 			recursive: false,
 			generate: [
@@ -65,7 +63,7 @@ Optional Variables:
 			]
 		}, {
 			match: /^(stats\.gauges)\.applications\.lucidchart\.api\.([^\.]+)\.current$/,
-			type: 'gauge',
+			types: ['gauge'],
 			recursive: false,
 			last: true,
 			generate: [
