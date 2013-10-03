@@ -35,7 +35,7 @@ Optional Variables:
 	aggregation:      array of aggregation rules to apply to incoming and aggregated metrics.
 	                  Metrics [default: [] (empty array)]
 		match:        regex to match incoming metrics against
-		types:        array of gauge, set, counter, and/or timer.
+		types:        '*' or array of gauge 'g', set 's', timer 'ms', or counter 'c'
 		recursive:    true if the generated metrics should also be aggregated
 		last:         true if processing should stop if a metric matches this rule
 		generate:     array of metrics to generate when an incoming metric matches
@@ -54,7 +54,7 @@ Optional Variables:
 	aggregation: [
 		{
 			match: /^(stats\.counters\.servers)\.myserver\.(.*)$/,
-			types: ['counter'],
+			types: '*',
 			last: false,
 			recursive: false,
 			generate: [
@@ -63,7 +63,7 @@ Optional Variables:
 			]
 		}, {
 			match: /^(stats\.gauges)\.applications\.lucidchart\.api\.([^\.]+)\.current$/,
-			types: ['gauge'],
+			types: ['g'],
 			recursive: false,
 			last: true,
 			generate: [

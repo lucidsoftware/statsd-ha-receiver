@@ -30,13 +30,6 @@ var configDefaults = {
 	aggregation: []
 };
 
-var metricMapper = {
-	ms: 'timer',
-	g: 'gauge',
-	c: 'counter',
-	s: 'set'
-};
-
 function flushMetrics() {
 	var metrics = {
 		counters: counters,
@@ -108,7 +101,7 @@ function recursiveAggregatedKeys(key, type, found, levels) {
 	for (aggregationIndex = 0; aggregationIndex < conf.aggregation.length; aggregationIndex++) {
 		var rule = conf.aggregation[aggregationIndex];
 
-		if (rule.types.indexOf(type) == -1) { continue; }
+		if (rule.types != '*' && rule.types.indexOf(type) == -1) { continue; }
 
 		var matches = key.match(rule.match);
 		if (!matches) { continue; }
@@ -191,13 +184,12 @@ function processLine(line) {
 		}
 
 		var metricType = fields[1].trim();
-		var mappedMetricType = metricMapper[metricType];
 
-		if (!keyAggregationsByMetricType.hasOwnProperty(mappedMetricType)) {
-			keyAggregationsByMetricType[mappedMetricType] = [key].concat(aggregatedKeys(key, mappedMetricType));
+		if (!keyAggregationsByMetricType.hasOwnProperty(metricType)) {
+			keyAggregationsByMetricType[metricType] = [key].concat(aggregatedKeys(key, metricType));
 		}
 
-		var allKeys = keyAggregationsByMetricType[mappedMetricType];
+		var allKeys = keyAggregationsByMetricType[metricType];
 		for (var allKeyIndex = 0; allKeyIndex < allKeys.length; allKeyIndex++) {
 			var oneKey = allKeys[allKeyIndex];
 			if (metricType === "ms") {
