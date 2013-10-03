@@ -5,11 +5,13 @@ var dgram  = require('dgram'),
     fs     = require('fs'),
     events = require('events'),
     set    = require('./lib/set'),
+    distributor = require('./lib/distributor'),
     logger = require('./lib/logger');
 
 var startupTime = Math.round(new Date().getTime() / 1000);
 var conf;
 var l;
+var d;
 
 var counters = {};
 var timers = {};
@@ -31,6 +33,10 @@ var configDefaults = {
 };
 
 function flushMetrics() {
+	if (conf.debug) {
+		l.log("flushing");
+	}
+
 	var metrics = {
 		counters: counters,
 		timers: timers,
@@ -45,8 +51,7 @@ function flushMetrics() {
 	gauges = {};
 	sets = {};
 
-	util.log(util.inspect(metrics));
-	console.log("flush");
+	d.process(metrics);
 }
 
 function normalizeConfig(config) {
@@ -289,6 +294,7 @@ config.configFile(process.argv[2], function (newConfig) {
 
 	conf = newConfig;
 	l = new logger.Logger(newConfig.log || {});
+	d = new distributor.Distributor(l, conf);
 
 	setInterval(flushMetrics, conf.flushInterval);
 

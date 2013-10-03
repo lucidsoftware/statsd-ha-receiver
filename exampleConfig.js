@@ -32,6 +32,8 @@ Optional Variables:
 		application:  name of the application for syslog [string, default: statsd]
 		level:        log level for [node-]syslog [string, default: LOG_INFO]
 
+	batchSize:        max message size to send downstream
+	blacklist:        array of regexes for blacklisting OUTGOING metrics
 	aggregation:      array of aggregation rules to apply to incoming and aggregated metrics.
 	                  Metrics [default: [] (empty array)]
 		match:        regex to match incoming metrics against
