@@ -1,4 +1,14 @@
 statsd-ha-receiver
 ==================
 
-Simple daemon that uses the StatsD protocol to accept stats from a load balancer and distribute them among a known set of StatsD servers. This helps in creating a highly available StatsD / Graphite architecture.
+Simple daemon that uses the [StatsD](https://github.com/etsy/statsd) protocol to aggregate and distribute stats among StatsD servers. This helps in creating a highly available StatsD / Graphite architecture.
+
+Installation and Configuration
+==================
+
+ * Install node.js
+ * Clone the project
+ * Create a config file from exampleConfig.js and put it somewhere
+ * Start the Daemon:
+
+    node stats.js /path/to/config
