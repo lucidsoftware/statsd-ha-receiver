@@ -18,6 +18,7 @@ var timers = {};
 var timerCounters = {};
 var gauges = {};
 var sets = {};
+var gaugeAggregateKeys = {};
 
 var configDefaults = {
 	port: 8125,
@@ -32,16 +33,35 @@ var configDefaults = {
 	aggregation: []
 };
 
+function convertAggregatedGauges() {
+	var aggKey, originalKey;
+
+	for (aggKey in gaugeAggregateKeys) {
+		var count = 0;
+		var sum = 0;
+		for (originalKey in gaugeAggregateKeys[aggKey]) {
+			sum += gauges[originalKey];
+			count++;
+		}
+
+		counters[aggKey + ".count"] = count;
+		counters[aggKey + ".sum"] = sum;
+	}
+}
+
 function flushMetrics() {
 	if (conf.debug) {
 		l.log("flushing");
 	}
+
+	convertAggregatedGauges();
 
 	var metrics = {
 		counters: counters,
 		timers: timers,
 		timerCounters: timerCounters,
 		gauges: gauges,
+		gaugeAggregateKeys: gaugeAggregateKeys,
 		sets: sets
 	};
 
@@ -49,6 +69,7 @@ function flushMetrics() {
 	timers = {};
 	timerCounters = {};
 	gauges = {};
+	gaugeAggregateKeys = {};
 	sets = {};
 
 	d.process(metrics);
@@ -198,6 +219,8 @@ function processLine(line) {
 		var allKeys = keyAggregationsByMetricType[metricType];
 		for (var allKeyIndex = 0; allKeyIndex < allKeys.length; allKeyIndex++) {
 			var oneKey = allKeys[allKeyIndex];
+			var originalKey = oneKey == key;
+
 			if (metricType === "ms") {
 				if (! timers[oneKey]) {
 					timers[oneKey] = [];
@@ -206,6 +229,13 @@ function processLine(line) {
 				timers[oneKey].push(Number(fields[0] || 0));
 				timerCounters[oneKey] += (1 / sampleRate);
 			} else if (metricType === "g") {
+				if (!originalKey) {
+					if (!gaugeAggregateKeys[oneKey]) {
+						gaugeAggregateKeys[oneKey] = {};
+					}
+					gaugeAggregateKeys[oneKey][key] = true;
+				}
+
 				if (gauges[oneKey] && fields[0].match(/^[-+]/)) {
 					gauges[oneKey] += Number(fields[0] || 0);
 				} else {
