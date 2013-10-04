@@ -118,6 +118,7 @@ function recursiveAggregatedKeys(key, type, found, levels) {
 				newKey = newKey.replace(replace, matches[backIndex]);
 			}
 
+			found[newKey] = true;
 			if (rule.recursive) {
 				recursiveAggregatedKeys(newKey, type, found, levels + 1);
 			}
@@ -191,7 +192,7 @@ function processLine(line) {
 		var metricType = fields[1].trim();
 
 		if (!keyAggregationsByMetricType.hasOwnProperty(metricType)) {
-			keyAggregationsByMetricType[metricType] = [key].concat(aggregatedKeys(key, metricType));
+			keyAggregationsByMetricType[metricType] = aggregatedKeys(key, metricType, true);
 		}
 
 		var allKeys = keyAggregationsByMetricType[metricType];
