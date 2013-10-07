@@ -288,22 +288,49 @@ function startServer() {
 	}
 	else {
 		server = net.createServer();
+		server.maxConnections = 65536;
 
 		server.on('connection', function(socket) {
+			socket.setEncoding("utf8");
+
 			if (conf.debug) {
 				l.log("Accepted connection from " + socket.remoteAddress + ":" + socket.remotePort);
 			}
 
 			var buffer = '';
 			socket.on('data', function(socketBuffer) {
-				buffer += socketBuffer.toString();
+				try {
+					buffer += socketBuffer.toString();
+				}
+				catch(e) {
+					if (conf.debug) {
+						l.log(e);
+					}
+				}
 			});
 
 			socket.on('end', function() {
-				if (buffer.length > 0) {
-					processLines(buffer.split("\n"));
+				try {
+					if (buffer.length > 0) {
+						processLines(buffer.split("\n"));
+					}
 				}
+				catch(e) {
+					if (conf.debug) {
+						l.log(e);
+					}
+				}
+
+				socket.end();
 			});
+
+			socket.on
+		});
+
+		server.on('error', function(e) {
+			if (conf.debug) {
+				l.log("server error: " + e);
+			}
 		});
 
 		server.on('listening', function() {
