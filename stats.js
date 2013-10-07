@@ -292,10 +292,18 @@ function startServer() {
 
 		server.on('connection', function(socket) {
 			socket.setEncoding("utf8");
+			socket.setKeepAlive(false);
 
 			if (conf.debug) {
 				l.log("Accepted connection from " + socket.remoteAddress + ":" + socket.remotePort);
 			}
+
+			socket.setTimeout(5000, function() {
+				if (conf.debug) {
+					l.log("Socket timed out");
+				}
+				socket.end();
+			});
 
 			var buffer = '';
 			socket.on('data', function(socketBuffer) {
