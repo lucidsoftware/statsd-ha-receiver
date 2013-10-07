@@ -323,8 +323,6 @@ function startServer() {
 
 				socket.end();
 			});
-
-			socket.on
 		});
 
 		server.on('error', function(e) {
