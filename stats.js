@@ -44,8 +44,8 @@ function convertAggregatedGauges() {
 			count++;
 		}
 
-		counters[aggKey + ".count"] = count;
-		counters[aggKey + ".sum"] = sum;
+		counters[aggKey + "-agg-gauge.count"] = count;
+		counters[aggKey + "-agg-gauge.sum"] = sum;
 	}
 }
 
